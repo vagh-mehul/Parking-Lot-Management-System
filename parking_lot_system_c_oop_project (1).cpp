@@ -1,6 +1,5 @@
 // =========================================
 // Parking Lot Management System (Optimized)
-// Uses unordered_set for free slots + waiting queues
 // Language: C++ (OOP Design)
 // =========================================
 
@@ -12,7 +11,7 @@ class Vehicle {
 protected:
     string number;
 public:
-    Vehicle(string num) { number = num; }
+    Vehicle(string num) : number(num) {}
     virtual string getType() const = 0;
     string getNumber() const { return number; }
     virtual ~Vehicle() {}
@@ -33,15 +32,11 @@ public:
 // -------- Parking Slot --------
 class ParkingSlot {
     int slotId;
-    string type; // Car / Bike
+    string type;
     bool occupied;
 
 public:
-    ParkingSlot(int id, string t) {
-        slotId = id;
-        type = t;
-        occupied = false;
-    }
+    ParkingSlot(int id, string t) : slotId(id), type(t), occupied(false) {}
 
     int getSlotId() const { return slotId; }
     string getType() const { return type; }
@@ -59,10 +54,8 @@ class Ticket {
     time_t entryTime;
 
 public:
-    Ticket(int tid, int sid, string vnum) {
-        ticketId = tid;
-        slotId = sid;
-        vehicleNumber = vnum;
+    Ticket(int tid, int sid, string vnum)
+        : ticketId(tid), slotId(sid), vehicleNumber(vnum) {
         entryTime = time(nullptr);
     }
 
@@ -71,37 +64,34 @@ public:
     string getVehicleNumber() const { return vehicleNumber; }
 };
 
-// -------- Parking Lot (Core Class) --------
+// -------- Parking Lot --------
 class ParkingLot {
     vector<ParkingSlot> slots;
 
-    unordered_set<int> freeCarSlots;   // slot IDs
-    unordered_set<int> freeBikeSlots;  // slot IDs
+    unordered_set<int> freeCarSlots;
+    unordered_set<int> freeBikeSlots;
 
     queue<Vehicle*> waitingCars;
     queue<Vehicle*> waitingBikes;
 
     unordered_map<string, Ticket> activeTickets;
-    int ticketCounter;
+    int ticketCounter = 1;
 
     ParkingSlot& getSlotById(int id) {
-        return slots[id - 1]; // slotId starts from 1
+        return slots[id - 1];
     }
 
 public:
     ParkingLot(int carSlots, int bikeSlots) {
         int id = 1;
         for (int i = 0; i < carSlots; i++) {
-            slots.push_back(ParkingSlot(id, "Car"));
-            freeCarSlots.insert(id);
-            id++;
+            slots.emplace_back(id, "Car");
+            freeCarSlots.insert(id++);
         }
         for (int i = 0; i < bikeSlots; i++) {
-            slots.push_back(ParkingSlot(id, "Bike"));
-            freeBikeSlots.insert(id);
-            id++;
+            slots.emplace_back(id, "Bike");
+            freeBikeSlots.insert(id++);
         }
-        ticketCounter = 1;
     }
 
     void parkVehicle(Vehicle* v) {
@@ -113,15 +103,17 @@ public:
                 ParkingSlot& slot = getSlotById(slotId);
                 slot.park();
 
-                Ticket t(ticketCounter++, slotId, v->getNumber());
-                activeTickets[v->getNumber()] = t;
+                activeTickets.emplace(
+                    v->getNumber(),
+                    Ticket(ticketCounter++, slotId, v->getNumber())
+                );
+
                 cout << "Car parked at slot " << slotId << endl;
             } else {
                 waitingCars.push(v);
-                cout << "No car slot free. Car added to waiting queue." << endl;
+                cout << "No car slot free. Added to waiting queue.\n";
             }
-        }
-        else { // Bike
+        } else {
             if (!freeBikeSlots.empty()) {
                 int slotId = *freeBikeSlots.begin();
                 freeBikeSlots.erase(slotId);
@@ -129,23 +121,27 @@ public:
                 ParkingSlot& slot = getSlotById(slotId);
                 slot.park();
 
-                Ticket t(ticketCounter++, slotId, v->getNumber());
-                activeTickets[v->getNumber()] = t;
+                activeTickets.emplace(
+                    v->getNumber(),
+                    Ticket(ticketCounter++, slotId, v->getNumber())
+                );
+
                 cout << "Bike parked at slot " << slotId << endl;
             } else {
                 waitingBikes.push(v);
-                cout << "No bike slot free. Bike added to waiting queue." << endl;
+                cout << "No bike slot free. Added to waiting queue.\n";
             }
         }
     }
 
     void removeVehicle(string vehicleNumber) {
-        if (activeTickets.find(vehicleNumber) == activeTickets.end()) {
-            cout << "Vehicle not found." << endl;
+        auto it = activeTickets.find(vehicleNumber);
+        if (it == activeTickets.end()) {
+            cout << "Vehicle not found.\n";
             return;
         }
 
-        Ticket t = activeTickets[vehicleNumber];
+        Ticket t = it->second;
         int slotId = t.getSlotId();
         ParkingSlot& slot = getSlotById(slotId);
         slot.free();
@@ -157,36 +153,39 @@ public:
         if (slot.getType() == "Car") {
             freeCarSlots.insert(slotId);
             if (!waitingCars.empty()) {
-                Vehicle* next = waitingCars.front(); waitingCars.pop();
+                Vehicle* next = waitingCars.front();
+                waitingCars.pop();
                 parkVehicle(next);
             }
         } else {
             freeBikeSlots.insert(slotId);
             if (!waitingBikes.empty()) {
-                Vehicle* next = waitingBikes.front(); waitingBikes.pop();
+                Vehicle* next = waitingBikes.front();
+                waitingBikes.pop();
                 parkVehicle(next);
             }
         }
 
-        activeTickets.erase(vehicleNumber);
-        cout << "Vehicle removed from slot " << slotId << ". Fee: Rs " << fee << endl;
+        activeTickets.erase(it);
+        cout << "Vehicle removed from slot " << slotId
+             << ". Fee: Rs " << fee << endl;
     }
 
     void displayStatus() {
         cout << "\n--- Parking Status ---\n";
         for (auto& slot : slots) {
-            cout << "Slot " << slot.getSlotId() << " (" << slot.getType() << ") : ";
-            cout << (slot.isOccupied() ? "Occupied" : "Free") << endl;
+            cout << "Slot " << slot.getSlotId()
+                 << " (" << slot.getType() << ") : "
+                 << (slot.isOccupied() ? "Occupied" : "Free") << endl;
         }
         cout << "Waiting Cars: " << waitingCars.size() << endl;
         cout << "Waiting Bikes: " << waitingBikes.size() << endl;
     }
 };
 
-// -------- Main Function --------
+// -------- Main --------
 int main() {
     int carSlots, bikeSlots;
-
     cout << "Enter number of Car slots: ";
     cin >> carSlots;
     cout << "Enter number of Bike slots: ";
@@ -195,7 +194,7 @@ int main() {
     ParkingLot lot(carSlots, bikeSlots);
 
     while (true) {
-       cout << "\n1. Park Car\n2. Park Bike\n3. Remove Vehicle\n4. Display Status\n5. Exit\n";
+        cout << "\n1. Park Car\n2. Park Bike\n3. Remove Vehicle\n4. Display Status\n5. Exit\n";
         int choice;
         cin >> choice;
 
@@ -224,7 +223,7 @@ int main() {
             break;
         }
         else {
-            cout << "Invalid choice." << endl;
+            cout << "Invalid choice.\n";
         }
     }
     return 0;
